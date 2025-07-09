@@ -1,0 +1,5 @@
+/dev
+/reviewed
+*_venv
+frontend/node_modules
+frontend/dist
