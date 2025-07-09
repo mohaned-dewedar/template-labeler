@@ -3,3 +3,4 @@
 *_venv
 frontend/node_modules
 frontend/dist
+*.pyc

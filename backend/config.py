@@ -9,3 +9,13 @@ class Config:
     PASS_DIR = REVIEW_FOLDER / "passed"
     TEMP_DIR = REVIEW_FOLDER / "temp"
     DECLINE_DIR = REVIEW_FOLDER / "declined"
+    REVIEW_DATA_DIR = Path("backend/review_data")
+    
+    REVIEW_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
+    REVIEW_FOLDER.mkdir(parents=True, exist_ok=True)    
+    ACCEPT_DIR.mkdir(parents=True, exist_ok=True)
+    PASS_DIR.mkdir(parents=True, exist_ok=True) 
+    TEMP_DIR.mkdir(parents=True, exist_ok=True)
+    DECLINE_DIR.mkdir(parents=True, exist_ok=True)
+

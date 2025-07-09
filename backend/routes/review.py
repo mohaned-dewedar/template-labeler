@@ -3,11 +3,14 @@ from backend.utils.video_utils import extract_frames_from_video
 from backend.utils.matching import sift_match_and_crop
 from backend.services.review_session import FrameReviewSession
 from backend.config import Config
+from backend.routes import review_bp
 
 import base64
 import shutil
 import zipfile
 from pathlib import Path
+import json
+import uuid
 
 import cv2
 from flask import (
@@ -23,8 +26,7 @@ from flask import (
 )
 
 
-app = Flask(__name__, static_folder="frontend", static_url_path="")
-app.secret_key = "review-secret"
+
 REVIEW_METADATA = []
 
 UPLOAD_FOLDER = Config.UPLOAD_FOLDER
@@ -33,6 +35,8 @@ ACCEPT_DIR = Config.ACCEPT_DIR
 PASS_DIR = Config.PASS_DIR
 TEMP_DIR = Config.TEMP_DIR
 DECLINE_DIR = Config.DECLINE_DIR
+REVIEW_DATA_DIR = Config.REVIEW_DATA_DIR
+
 
 
 FRAME_PATHS = []
@@ -49,18 +53,20 @@ for d in [UPLOAD_FOLDER, ACCEPT_DIR, PASS_DIR, TEMP_DIR]:
 
 
 
-@app.route('/api/upload', methods=['POST'])
+@review_bp.route('/api/upload', methods=['POST'])
 def api_upload():
     input_type = request.form.get('inputType', 'video')
     template_file = request.files.get('template')
-    
+
     if not template_file:
         return jsonify({'error': 'Missing template file'}), 400
-    
+
+    review_id = str(uuid.uuid4())
+    session['review_id'] = review_id
+
     template_path = UPLOAD_FOLDER / (template_file.filename or 'template')
     template_file.save(template_path)
 
-    # Initialize review session object
     review = FrameReviewSession(template_path=template_path, temp_dir=TEMP_DIR)
 
     if input_type == 'video':
@@ -78,95 +84,104 @@ def api_upload():
         zip_path = UPLOAD_FOLDER / (zip_file.filename or 'upload.zip')
         zip_file.save(zip_path)
         review.prepare_from_zip(zip_path)
+
     else:
         return jsonify({'error': 'Invalid input type'}), 400
 
-    # Store session in a global dict or attach file paths to session
-    session['idx'] = 0
-    session['frame_paths'] = [str(p) for p in review.frame_paths]
-    session['orig_paths'] = [str(p) for p in review.orig_paths]
-    session['metadata'] = review.metadata  # OR: write to file & store filename
+    # Save review metadata to disk
+    data = {
+        "index": 0,
+        "frame_paths": [str(p) for p in review.frame_paths],
+        "orig_paths": [str(p) for p in review.orig_paths],
+        "metadata": review.metadata,
+    }
+
+    with open(REVIEW_DATA_DIR / f"{review_id}.json", "w") as f:
+        json.dump(data, f)
 
     return jsonify({'total': len(review.frame_paths)})
 
 
 
-@app.route('/api/frame')
+@review_bp.route('/api/frame')
 def api_frame():
-    idx = session.get('idx', 0)
-    frame_paths = session.get('frame_paths', [])
+    review_id = session.get('review_id')
+    if not review_id:
+        return jsonify({'done': True})
+
+    data_file = REVIEW_DATA_DIR / f"{review_id}.json"
+    if not data_file.exists():
+        return jsonify({'done': True})
+
+    with open(data_file, "r") as f:
+        data = json.load(f)
+
+    idx = data["index"]
+    frame_paths = data["frame_paths"]
     if idx >= len(frame_paths):
         return jsonify({'done': True})
 
-    img_path = Path(frame_paths[idx])
-    with open(img_path, 'rb') as f:
-        img_data = base64.b64encode(f.read()).decode('utf-8')
+    # Load image
+    img_path = frame_paths[idx]
+    _, buffer = cv2.imencode(".jpg", cv2.imread(img_path))
+    img_data = base64.b64encode(buffer).decode("utf-8")
 
-    return jsonify({'index': idx, 'total': len(frame_paths), 'img_data': img_data})
+    return jsonify({
+        "index": idx,
+        "img_data": img_data,
+        "total": len(frame_paths),
+        "done": False
+    })
 
 
 
-@app.route('/api/action', methods=['POST'])
+@review_bp.route('/api/action', methods=['POST'])
 def api_action():
-    data = request.get_json() or {}
-    action = data.get('action')
-    idx = session.get('idx', 0)
+    review_id = session.get('review_id')
+    if not review_id:
+        return jsonify({'error': 'No session'}), 400
 
-    frame_paths = session.get('frame_paths', [])
-    orig_paths = session.get('orig_paths', [])
-    metadata = session.get('metadata', [])
+    data_file = REVIEW_DATA_DIR / f"{review_id}.json"
+    if not data_file.exists():
+        return jsonify({'error': 'Session expired'}), 400
 
-    if idx >= len(orig_paths):
-        return jsonify({'done': True})
+    with open(data_file, "r") as f:
+        data = json.load(f)
 
-    src = Path(orig_paths[idx])
-    frame_name = Path(frame_paths[idx]).name
+    idx = data["index"]
+    frame_paths = data["frame_paths"]
+    orig_paths = data["orig_paths"]
+    metadata = data["metadata"]
 
-    if action == 'accept':
-        dest = ACCEPT_DIR / src.name
-        shutil.copy(src, dest)
-    elif action == 'pass':
-        dest = PASS_DIR / src.name
-        shutil.copy(src, dest)
-    elif action == 'decline':
-        dest = DECLINE_DIR / src.name
-        shutil.copy(src, dest)
-    else:
-        return jsonify({'error': 'Invalid action'}), 400
+    if idx >= len(frame_paths):
+        return jsonify({'error': 'No more frames'}), 400
 
-    for entry in metadata:
-        if entry['frame'] == frame_name:
-            entry['status'] = action
-            break
+    action = request.json.get("action")
+    # (perform action: copy or discard image)
 
-    session['metadata'] = metadata
-    session['idx'] = idx + 1
+    # Advance index
+    data["index"] += 1
+    with open(data_file, "w") as f:
+        json.dump(data, f)
 
-    done = session['idx'] >= len(frame_paths)
-    return jsonify({'done': done})
+    return jsonify({"ok": True})
 
-@app.route('/api/metadata')
+@review_bp.route('/api/metadata')
 def api_metadata():
     metadata = session.get('metadata', [])
     return jsonify(metadata)
 
 
-@app.route('/api/download')
+@review_bp.route('/api/download')
 def api_download():
-    zip_path = REVIEW_FOLDER / 'accepted_images.zip'
-    metadata_path = REVIEW_FOLDER / 'review_metadata.json'
-
-    with zipfile.ZipFile(zip_path, 'w') as zf:
-        # Add accepted images
-        for img_path in ACCEPT_DIR.glob('*.jpg'):
-            zf.write(img_path, img_path.name)
-
-        # Write full metadata
-        with open(metadata_path, 'w') as f:
-            import json
-            json.dump(REVIEW_METADATA, f, indent=2)
-
-        zf.write(metadata_path, 'review_metadata.json')
+    review_id = session.get('review_id')
+    zip_path = shutil.make_archive("accepted_images", "zip", ACCEPT_DIR)
+    
+    # Clean up
+    try:
+        (REVIEW_DATA_DIR / f"{review_id}.json").unlink()
+    except:
+        pass
 
     return send_file(zip_path, as_attachment=True)
 
@@ -273,7 +288,7 @@ def prepare_frames(input_path: Path, template_path: Path, input_type: str = 'vid
             FRAME_PATHS.append(frame_file)
             ORIG_PATHS.append(orig_file)
 
-@app.route('/legacy', methods=['GET', 'POST'])
+@review_bp.route('/legacy', methods=['GET', 'POST'])
 def legacy_upload():
     if request.method == 'POST':
         video = request.files['video']
@@ -289,7 +304,7 @@ def legacy_upload():
         return redirect(url_for('review'))
     return render_template('upload.html')
 
-@app.route('/review', methods=['GET'])
+@review_bp.route('/review', methods=['GET'])
 def review():
     idx = session.get('idx', 0)
     if idx >= len(FRAME_PATHS):
@@ -299,7 +314,7 @@ def review():
         img_data = base64.b64encode(f.read()).decode('utf-8')
     return render_template('review.html', index=idx, total=len(FRAME_PATHS), img_data=img_data)
 
-@app.route('/action', methods=['POST'])
+@review_bp.route('/action', methods=['POST'])
 def action():
     action = request.form.get('action')
     idx = session.get('idx', 0)
@@ -317,7 +332,7 @@ def action():
         return redirect(url_for('complete'))
     return redirect(url_for('review'))
 
-@app.route('/complete')
+@review_bp.route('/complete')
 def complete():
     zip_path = REVIEW_FOLDER / 'accepted_images.zip'
     with zipfile.ZipFile(zip_path, 'w') as zf:
@@ -325,10 +340,10 @@ def complete():
             zf.write(img_path, img_path.name)
     return render_template('complete.html')
 
-@app.route('/download')
+@review_bp.route('/download')
 def download_zip():
     zip_path = REVIEW_FOLDER / 'accepted_images.zip'
     return send_file(zip_path, as_attachment=True)
 
 if __name__ == '__main__':
-    app.run()
+    review_bp.run()
