@@ -15,13 +15,18 @@ Beyond automated map cropping, this tool is evolving into a **semi-automatic obj
 
 ---
 
+**Upload Screen**
+![Upload Screen](/sceenshots/home_page.png)
+
+**Review Screen**
+![Review Screen](/sceenshots/frame_review.png)
+
 ## 🛠️ Installation
 
 ### 🔧 Backend Setup
 
 ```bash
-git clone <your-repo-url>   # Replace with your actual repository URL
-cd Sift_Cropper
+git clone https://github.com/mohaned-dewedar/template-labeler   
 pip install -r requirements.txt
 python run.py
 ```
