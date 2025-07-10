@@ -1,56 +1,51 @@
-# Sift Cropper
+# 🗺️ Sift Cropper
 
-Sift Cropper
-🧠 Why Am I Creating This?
-This project is a personal learning exercise in image processing, web development, and machine learning. The core motivation is to automatically crop maps from recorded gameplay videos using the SIFT (Scale-Invariant Feature Transform) algorithm.
+**Sift Cropper** is a personal project exploring the intersection of **image processing**, **web development**, and **machine learning**. Its primary goal is to automatically **crop maps from recorded gameplay videos** using the SIFT (Scale-Invariant Feature Transform) algorithm.
 
-Instead of manually cropping the map or relying on users to provide coordinates (which may not be feasible if HUDs are customized), this tool helps automate the cropping process. Over time, I realized this could also serve as a semi-automatic object detection/labelling tool, where users review and accept or reject SIFT-detected bounding boxes—reducing manual annotation work.
+Beyond automated map cropping, this tool is evolving into a **semi-automatic object detection and labeling utility**. Users can quickly review and decide to accept or reject SIFT-detected bounding boxes, significantly reducing the manual effort typically required for image annotation.
 
-🚀 Features
-Upload videos or ZIP files containing images
+---
 
-Extract frames and apply SIFT-based image processing
+## 🚀 Features
 
-Visual review and accept/reject interface for cropped results
+- **Flexible Uploads**: Upload videos or ZIP archives containing images.
+- **Intelligent Processing**: Automatically extracts frames and applies SIFT-based image processing to detect and crop relevant sections.
+- **Interactive Review**: Provides a visual interface where users can easily accept or reject each automatically cropped result.
+- **Downloadable Results**: Download only the images that have been reviewed and accepted.
 
-Download processed and accepted images
+---
 
-🛠️ Installation
-Backend Setup
-bash
-Copy
-Edit
-git clone <your-repo-url>
+## 🛠️ Installation
+
+### 🔧 Backend Setup
+
+```bash
+git clone <your-repo-url>   # Replace with your actual repository URL
 cd Sift_Cropper
 pip install -r requirements.txt
 python run.py
-Frontend Setup
-bash
-Copy
-Edit
+```
+
+### 🌐 Frontend Setup
+
+```bash
 cd frontend
 npm install
 npm start
-💻 Usage
-Open your browser and go to http://localhost:3000
-
-Upload a video or ZIP file containing images
-
-Review automatically cropped images
-
-Accept or reject each cropped image
-
-Download the processed (accepted) results
+```
 
 
+## 💻 Usage
 
-# Work In Progress
-Dockerize Application and convert to executable/bash file.
+Once both the backend and frontend are running:
 
+1. Open your web browser and navigate to `http://localhost:5000`
+2. Upload a video file or a ZIP file containing images
+3. Review the automatically cropped images presented in the interface
+4. Accept or reject each cropped image based on your needs
+5. Download the folder containing all your processed and accepted images
 
+## 🚧 Work In Progress
 
-
-
-
-
-
+- **Dockerization**: Packaging the application into Docker containers for easier deployment and portability
+- **Executable/Bash Conversion**: Converting the application into a standalone executable or a simple bash script for streamlined execution
