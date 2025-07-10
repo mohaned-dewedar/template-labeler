@@ -114,7 +114,7 @@ function App() {
   
   }
 
-  return <CompleteScreen />;
+ return <CompleteScreen onRestart={() => setStep("upload")} />;
     
 }
 
